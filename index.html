@@ -3,152 +3,350 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>性格診断アプリ</title>
+    <title>180問 精密タイプ診断</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f4; padding: 20px; }
-        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { text-align: center; font-size: 1.2em; }
-        .progress-bar { width: 100%; background-color: #e0e0e0; border-radius: 5px; margin-bottom: 20px; }
-        .progress-fill { height: 10px; background-color: #00b900; width: 0%; border-radius: 5px; transition: width 0.3s; }
-        .question { display: none; }
-        .question.active { display: block; }
-        .options { margin-top: 15px; }
-        button { display: block; width: 100%; padding: 10px; margin-bottom: 10px; background-color: white; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; text-align: left; }
-        button:hover { background-color: #f0f0f0; }
-        #result { display: none; text-align: center; }
+        :root { --line-green: #06C755; --bg-gray: #f5f6f7; }
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-gray); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        
+        /* 進捗バー */
+        .progress-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; color: #888; }
+        .bar-outer { height: 6px; background: #eee; border-radius: 3px; margin-bottom: 25px; overflow: hidden; }
+        .bar-inner { height: 100%; background: var(--line-green); width: 0%; transition: width 0.3s; }
+
+        /* 質問リスト */
+        .q-container { border-bottom: 1px solid #f0f0f0; padding: 20px 0; }
+        .q-text { font-size: 1rem; font-weight: bold; margin-bottom: 15px; line-height: 1.4; color: #333; }
+        
+        /* 2択ボタンのデザイン */
+        .choice-group { display: flex; gap: 10px; }
+        .choice-btn { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: white; cursor: pointer; font-weight: bold; color: #666; transition: 0.2s; }
+        .choice-btn.active { background: var(--line-green); color: white; border-color: var(--line-green); }
+
+        /* 次へボタン */
+        .next-btn { width: 100%; padding: 18px; background: var(--line-green); color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 30px; transition: opacity 0.2s; }
+        .next-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        #result-screen { display: none; text-align: center; }
+        .result-type { font-size: 2rem; color: var(--line-green); margin: 20px 0; font-weight: 900; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>性格診断ツール</h1>
-    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-    
-    <div id="quizArea">
-        <div id="questionText"></div>
-        <div id="optionsArea" class="options"></div>
+    <div id="quiz-screen">
+        <div class="progress-header">
+            <span>進捗 <span id="percent">0%</span></span>
+            <span><span id="current-page">1</span> / 45 ページ</span>
+        </div>
+        <div class="bar-outer"><div class="bar-inner" id="bar-inner"></div></div>
+        
+        <div id="question-list">
+            </div>
+
+        <button id="next-button" class="next-btn" onclick="nextPage()" disabled>次の4問へ</button>
     </div>
 
-    <div id="result">
-        <h2>診断結果</h2>
-        <p id="resultText"></p>
-        <button onclick="location.reload()">もう一度診断する</button>
+    <div id="result-screen">
+        <p>あなたの診断結果は...</p>
+        <div id="best-type-name" class="result-type"></div>
+        <p id="type-description" style="color:#666; line-height:1.6; white-space: pre-wrap;"></p>
+        <button class="next-btn" onclick="location.reload()">もう一度診断する</button>
     </div>
 </div>
 
 <script>
-    // 💡 1. 診断データ（お手持ちのリストをここに当てはめてください）
+    // 💡 180問の全データ（前の回答の続きとして貼り付けてください）
+    const rawDataList = [
+"自分の欠点を改め、より良い人間になろうと努力している,type1",
+"物事があるべき姿でないとイライラする,type1",
+"自分に割り当てられた以上に働くことがよくある,type1",
+"もっとよくやれたはずなのにどうしてやれなかったのかと、しばしば自分を責める,type1",
+"小さなミスや欠点が気にかかり、細部にこだわる,type1",
+"他人から批判されないように、物事は正しく行おうとする,type1",
+"批判的にはなりたくないが、そうならずにいるのは難しい,type1",
+"すべてのことに率直でありたいと思っている,type1",
+"不正なことや悪いことをする人は許せない,type1",
+"嘘やごまかしなど悪いことはしない主義だ,type1",
+"やらなければならないことがたくさんあるので、いつも急ぎ立てられている,type1",
+"物事が平等に公平に行われていないと、すぐに腹が立つ,type1",
+"向上心が強く、もっとよくなりたいと思っている,type1",
+"他人に認められる前に、まず自分が完全でなければいけないと思う,type1",
+"正しいか誤っているか、良いか悪いかという基準で物事をみる,type1",
+"嫉妬や怒りを感じていても、表に出さないようにする,type1",
+"自分の信念にこだわりを持っている,type1",
+"まちがってはいなかったか、失敗ではなかったかと、よく反省する,type1",
+"いつもみんなの立場を考えて、納得のいく方法を探っている,type1",
+"私がしないと誰もしないのではないかと思うと、つい手や口を出したくなる,type1",
+"人の役に立つことが好きで、頼られると嬉しい,type2",
+"人の気持ちに敏感で、困っている人を見ると助けたくなる,type2",
+"自分よりも他人のことを優先してしまうことが多い,type2",
+"誰かに必要とされていないと寂しく感じる,type2",
+"感謝されるととても嬉しい,type2",
+"人とのつながりをとても大切にしている,type2",
+"人の役に立てていないと自分の価値がないように感じる,type2",
+"他人の期待に応えようと頑張りすぎることがある,type2",
+"相手のためを思って行動することが多い,type2",
+"人から好かれたいと思う気持ちが強い,type2",
+"人間関係がうまくいかないと落ち込む,type2",
+"人の世話を焼くことが多い,type2",
+"誰かを励ましたり支えたりするのが得意だ,type2",
+"相手の気持ちを察することができる,type2",
+"人の役に立つと自分も満たされる,type2",
+"感情的に人と深く関わることが多い,type2",
+"人のために頑張りすぎて疲れることがある,type2",
+"頼られると断れないことが多い,type2",
+"人と親しくなるのが比較的早い,type2",
+"人を喜ばせるのが好きだ,type2",
+"成功していると思われたい,type3",
+"目標を達成することに喜びを感じる,type3",
+"効率よく物事を進めるのが得意だ,type3",
+"人から評価されるとやる気が出る,type3",
+"失敗すると自分の価値が下がったように感じる,type3",
+"結果を出すことが重要だと思う,type3",
+"周囲から有能だと思われたい,type3",
+"忙しくしている方が安心する,type3",
+"競争に勝つことにやりがいを感じる,type3",
+"目標達成のためには努力を惜しまない,type3",
+"成果を出すことに強いこだわりがある,type3",
+"自分のイメージを意識することが多い,type3",
+"成功している人を見ると刺激を受ける,type3",
+"無駄なことはあまりしたくない,type3",
+"常に前進していたい,type3",
+"周囲に認められたいという気持ちが強い,type3",
+"結果で評価されるべきだと思う,type3",
+"効率と成果を重視する,type3",
+"自分の能力を最大限に発揮したい,type3",
+"成功するために努力する,type3",
+"自分は他の人とは違う特別な存在だと感じることがある,type4",
+"感情が豊かだと言われる,type4",
+"美しいものや芸術に惹かれる,type4",
+"孤独を感じることが多い,type4",
+"自分の感情を深く味わう,type4",
+"普通であることに退屈を感じる,type4",
+"独自の感性を大切にしている,type4",
+"感情の浮き沈みが激しいことがある,type4",
+"自分の個性を表現したい,type4",
+"人とは違う視点で物事を見る,type4",
+"感情に強く影響される,type4",
+"自分の内面を深く見つめる,type4",
+"本物であることを大切にする,type4",
+"自分の世界観を持っている,type4",
+"美しいものに心が動く,type4",
+"深い感情体験を求める,type4",
+"個性的だと言われる,type4",
+"平凡さを嫌う,type4",
+"感受性が強い,type4",
+"自分らしさを大切にする,type4",
+"知識を深めることが好きだ,type5",
+"物事を観察するのが得意だ,type5",
+"一人で考える時間が必要だ,type5",
+"感情よりも論理を重視する,type5",
+"興味のある分野を深く追求する,type5",
+"人と距離を置くことがある,type5",
+"新しい情報を得ると嬉しい,type5",
+"分析することが好きだ,type5",
+"知的好奇心が強い,type5",
+"物事の仕組みを理解したい,type5",
+"冷静だと言われる,type5",
+"感情表現は控えめだ,type5",
+"一人の時間が必要だ,type5",
+"深く考えることが多い,type5",
+"客観的に物事を見る,type5",
+"知識を蓄えるのが好きだ,type5",
+"観察することが多い,type5",
+"思考することに時間を使う,type5",
+"研究するのが好きだ,type5",
+"理解することに喜びを感じる,type5",
+"将来のことを心配することが多い,type6",
+"安全を確保したいと思う,type6",
+"信頼できる人を大切にする,type6",
+"最悪の事態を想定することがある,type6",
+"責任感が強い,type6",
+"慎重に行動する,type6",
+"信頼関係を重視する,type6",
+"不安を感じやすい,type6",
+"リスクを避けようとする,type6",
+"仲間意識が強い,type6",
+"ルールを守ることを重視する,type6",
+"疑問を持つことが多い,type6",
+"信頼できるかどうかを見極める,type6",
+"安全な方法を選びたい,type6",
+"備えをしておきたい,type6",
+"不確実な状況が苦手,type6",
+"慎重派だ,type6",
+"責任を果たしたい,type6",
+"信頼できる組織を求める,type6",
+"危険を避けたい,type6",
+"楽しいことが大好き,type7",
+"新しい体験を求める,type7",
+"退屈が苦手,type7",
+"いろいろなことに興味がある,type7",
+"ポジティブに考える,type7",
+"自由を大切にする,type7",
+"楽しい計画を立てるのが好き,type7",
+"ワクワクすることを探す,type7",
+"悲しいことは避けたい,type7",
+"エネルギッシュだ,type7",
+"冒険心がある,type7",
+"可能性を考えるのが好き,type7",
+"新しいアイデアが浮かぶ,type7",
+"楽観的だ,type7",
+"人生を楽しみたい,type7",
+"刺激を求める,type7",
+"多くのことに挑戦したい,type7",
+"前向きに考える,type7",
+"面白いことを探す,type7",
+"楽しい雰囲気が好き,type7",
+"強くありたいと思う,type8",
+"自分の意見をはっきり言う,type8",
+"正面から物事に向き合う,type8",
+"弱い立場の人を守りたい,type8",
+"リーダーシップを取ることが多い,type8",
+"自分で決断したい,type8",
+"遠慮せずに行動する,type8",
+"支配されるのが嫌い,type8",
+"力強いと言われる,type8",
+"率直に話す,type8",
+"正義感が強い,type8",
+"自立心がある,type8",
+"決断が早い,type8",
+"強い意志を持っている,type8",
+"対立を恐れない,type8",
+"責任を引き受ける,type8",
+"守るべきものを守る,type8",
+"大胆だ,type8",
+"行動力がある,type8",
+"はっきりした性格だ,type8",
+"なぜ人はあくせく一生懸命になっているのだろうかと思うことがある,type9",
+"私はめったに動じない。他の人からは落ち着いていると言われる,type9",
+"何もしないでのんびりとリラックスしている時間が心地よく落ち着く,type9",
+"私はどちらかというとおっとりしている,type9",
+"気がつくと何もしていないことが多い,type9",
+"争いごとはできるだけ避けたい,type9",
+"周囲の人と調和していたい,type9",
+"自分の意見を強く主張するのは苦手だ,type9",
+"穏やかな環境が好きだ,type9",
+"人と仲良くしていたい,type9",
+"平和が一番大切だと思う,type9",
+"ゆったりした時間が好き,type9",
+"周囲に合わせることが多い,type9",
+"衝突は避けたい,type9",
+"安心できる場所が好き,type9",
+"のんびりした性格だ,type9",
+"平穏な日常が好き,type9",
+"人と争うくらいなら譲る,type9",
+"落ち着いた雰囲気が好き,type9",
+"気楽に過ごしたい,type9"
+        // ... 残りの168問も同様に追加してください
+    ];
 
-
-
-const questions = [
-    // --- カテゴリ1：完璧・理想 (Type 1) ---
-    { text: "自分の欠点を改め、より良い人間になろうと努力している", options: [{ label: "はい", scores: { type1: 2 } }, { label: "いいえ", scores: { type1: 0 } }] },
-    { text: "物事があるべき姿でないとイライラする", options: [{ label: "はい", scores: { type1: 2 } }, { label: "いいえ", scores: { type1: 0 } }] },
-    { text: "もっとよくやれたはずなのにどうしてやれなかったのかと、しばしば自分を責める", options: [{ label: "はい", scores: { type1: 2 } }, { label: "いいえ", scores: { type1: 0 } }] },
-    { text: "小さなミスや欠点が気にかかり、細部にこだわる", options: [{ label: "はい", scores: { type1: 2 } }, { label: "いいえ", scores: { type1: 0 } }] },
-    // --- カテゴリ2：献身・助け合い (Type 2) ---
-    { text: "他人が困っていると、自分のことを後回しにして助ける", options: [{ label: "はい", scores: { type2: 2 } }, { label: "いいえ", scores: { type2: 0 } }] },
-    { text: "人から感謝されることが、何よりのモチベーションだ", options: [{ label: "はい", scores: { type2: 2 } }, { label: "いいえ", scores: { type2: 0 } }] },
-    { text: "相手が何を求めているか、察するのが得意だ", options: [{ label: "はい", scores: { type2: 2 } }, { label: "いいえ", scores: { type2: 0 } }] },
-    // --- カテゴリ3：達成・効率 (Type 3) ---
-    { text: "目標を達成するためなら、多少の無理もいとわない", options: [{ label: "はい", scores: { type3: 2 } }, { label: "いいえ", scores: { type3: 0 } }] },
-    { text: "周囲から「有能だ」と思われたいという欲求が強い", options: [{ label: "はい", scores: { type3: 2 } }, { label: "いいえ", scores: { type3: 0 } }] },
-    { text: "効率の悪いやり方を見ているとイライラする", options: [{ label: "はい", scores: { type3: 2 } }, { label: "いいえ", scores: { type3: 0 } }] },
-    // --- カテゴリ4：個性・感受性 (Type 4) ---
-    { text: "他人と同じであることを嫌い、独自性を大切にする", options: [{ label: "はい", scores: { type4: 2 } }, { label: "いいえ", scores: { type4: 0 } }] },
-    { text: "自分の感情に深く沈み込み、物思いにふけることが多い", options: [{ label: "はい", scores: { type4: 2 } }, { label: "いいえ", scores: { type4: 0 } }] },
-    { text: "芸術や美しいものに対して人一倍感動しやすい", options: [{ label: "はい", scores: { type4: 2 } }, { label: "いいえ", scores: { type4: 0 } }] },
-    // --- カテゴリ5：観察・知識 (Type 5) ---
-    { text: "行動する前に、まず情報を集めて分析したい", options: [{ label: "はい", scores: { type5: 2 } }, { label: "いいえ", scores: { type5: 0 } }] },
-    { text: "一人で静かに考える時間が、自分には絶対必要だ", options: [{ label: "はい", scores: { type5: 2 } }, { label: "いいえ", scores: { type5: 0 } }] },
-    { text: "感情的な議論よりも、論理的な話し合いを好む", options: [{ label: "はい", scores: { type5: 2 } }, { label: "いいえ", scores: { type5: 0 } }] },
-    // --- カテゴリ6：忠実・安全 (Type 6) ---
-    { text: "リスクを最小限に抑えるための準備を欠かさない", options: [{ label: "はい", scores: { type6: 2 } }, { label: "いいえ", scores: { type6: 0 } }] },
-    { text: "信頼できるリーダーやルールがあると安心する", options: [{ label: "はい", scores: { type6: 2 } }, { label: "いいえ", scores: { type6: 0 } }] },
-    { text: "「もし〜なったらどうしよう」と不安になることが多い", options: [{ label: "はい", scores: { type6: 2 } }, { label: "いいえ", scores: { type6: 0 } }] },
-    // --- カテゴリ7：熱中・楽天 (Type 7) ---
-    { text: "楽しい計画を立てている時が一番幸せだ", options: [{ label: "はい", scores: { type7: 2 } }, { label: "いいえ", scores: { type7: 0 } }] },
-    { text: "一つのことに集中するより、色々なことに興味を持ちたい", options: [{ label: "はい", scores: { type7: 2 } }, { label: "いいえ", scores: { type7: 0 } }] },
-    { text: "辛いことがあっても、すぐに切り替えて前を向ける", options: [{ label: "はい", scores: { type7: 2 } }, { label: "いいえ", scores: { type7: 0 } }] },
-    // --- カテゴリ8：挑戦・強さ (Type 8) ---
-    { text: "自分の意見ははっきりと主張する方だ", options: [{ label: "はい", scores: { type8: 2 } }, { label: "いいえ", scores: { type8: 0 } }] },
-    { text: "不公平なことや弱いものいじめを見ると黙っていられない", options: [{ label: "はい", scores: { type8: 2 } }, { label: "いいえ", scores: { type8: 0 } }] },
-    { text: "他人にコントロールされるのを極端に嫌う", options: [{ label: "はい", scores: { type8: 2 } }, { label: "いいえ", scores: { type8: 0 } }] },
-    // --- カテゴリ9：平和・調和 (Type 9) ---
-    { text: "争いごとは避け、穏やかに過ごしたい", options: [{ label: "はい", scores: { type9: 2 } }, { label: "いいえ", scores: { type9: 0 } }] },
-    { text: "周囲の雰囲気に自分を合わせるのが得意だ", options: [{ label: "はい", scores: { type9: 2 } }, { label: "いいえ", scores: { type9: 0 } }] },
-    { text: "決断を迫られると、つい先延ばしにしてしまう", options: [{ label: "はい", scores: { type9: 2 } }, { label: "いいえ", scores: { type9: 0 } }] },
-
-    // ※ スペースの都合上、同様の形式で各タイプ11問〜12問ずつ配置して合計100問にします。
-    // 以下、同様のロジックで合計100になるまで質問を追加した完全版を作成可能です。
-];
-
-
-
-
-    // 💡 2. タイプ名定義（9種類）
-    const typeNames = {
-        type1: "冒険家タイプ",
-        type2: "計画家タイプ",
-        type3: "芸術家タイプ",
-        type4: "分析家タイプ",
-        // ... あと5つ追加
+    const typeDetails = {
+        type1: { name: "完璧主義者", desc: "高い理想を持ち、正義感にあふれるタイプです。" },
+        type2: { name: "献身家", desc: "思いやりがあり、人の助けになることに喜びを感じるタイプです。" },
+        type3: { name: "達成者", desc: "目標に向かって効率よく成果を出すのが得意なタイプです。" },
+        type4: { name: "芸術家", desc: "独自の感性を持ち、自分の世界観を大切にするタイプです。" },
+        type5: { name: "研究者", desc: "知識を蓄え、物事を冷静に観察・分析するタイプです。" },
+        type6: { name: "慎重派", desc: "責任感が強く、安全や信頼を第一に考えるタイプです。" },
+        type7: { name: "楽天家", desc: "好奇心旺盛で、人生を楽しくポジティブに過ごすタイプです。" },
+        type8: { name: "統率者", desc: "決断力があり、周囲を力強く引っ張っていくリーダータイプです。" },
+        type9: { name: "平和主義者", desc: "穏やかで、周囲との調和を大切にするタイプです。" }
     };
 
-    let currentQuestionIndex = 0;
-    let scores = {}; // スコア初期化用
+    let questions = [];
+    let currentPage = 0;
+    const questionsPerPage = 4;
+    let userAnswers = {}; // { 質問INDEX: スコア }
 
-    // スコアを初期化する関数
-    function initScores() {
-        Object.keys(typeNames).forEach(type => scores[type] = 0);
+    function init() {
+        questions = rawDataList.map(item => {
+            const lastCommaIndex = item.lastIndexOf(",");
+            return { text: item.substring(0, lastCommaIndex), type: item.substring(lastCommaIndex + 1).trim() };
+        });
+        renderPage();
     }
 
-    function showQuestion() {
-        if (currentQuestionIndex >= questions.length) {
-            showResult();
-            return;
+    function renderPage() {
+        const listContainer = document.getElementById("question-list");
+        listContainer.innerHTML = "";
+        
+        const start = currentPage * questionsPerPage;
+        const end = Math.min(start + questionsPerPage, questions.length);
+
+        for (let i = start; i < end; i++) {
+            const qDiv = document.createElement("div");
+            qDiv.className = "q-container";
+            qDiv.innerHTML = `
+                <div class="q-text">${i + 1}. ${questions[i].text}</div>
+                <div class="choice-group">
+                    <button class="choice-btn ${userAnswers[i] === 1 ? 'active' : ''}" onclick="selectAnswer(${i}, 1, this)">はい</button>
+                    <button class="choice-btn ${userAnswers[i] === 0 ? 'active' : ''}" onclick="selectAnswer(${i}, 0, this)">いいえ</button>
+                </div>
+            `;
+            listContainer.appendChild(qDiv);
         }
 
-        const q = questions[currentQuestionIndex];
-        document.getElementById("questionText").innerText = `Q${currentQuestionIndex + 1}: ${q.text}`;
-        
-        // 進捗バーの更新
-        const progress = (currentQuestionIndex / questions.length) * 100;
-        document.getElementById("progressFill").style.width = `${progress}%`;
+        updateUI();
+    }
 
-        const optionsArea = document.getElementById("optionsArea");
-        optionsArea.innerHTML = "";
+    function selectAnswer(index, score, btn) {
+        userAnswers[index] = score;
         
-        q.options.forEach(option => {
-            const btn = document.createElement("button");
-            btn.innerText = option.label;
-            btn.onclick = () => {
-                // スコア加算
-                for (let type in option.scores) {
-                    scores[type] += option.scores[type];
-                }
-                currentQuestionIndex++;
-                showQuestion();
-            };
-            optionsArea.appendChild(btn);
-        });
+        // ボタンの見た目を更新
+        const parent = btn.parentElement;
+        Array.from(parent.children).forEach(child => child.classList.remove('active'));
+        btn.classList.add('active');
+
+        checkPageCompletion();
+    }
+
+    function checkPageCompletion() {
+        const start = currentPage * questionsPerPage;
+        const end = Math.min(start + questionsPerPage, questions.length);
+        let completed = true;
+        for (let i = start; i < end; i++) {
+            if (userAnswers[i] === undefined) completed = false;
+        }
+        document.getElementById("next-button").disabled = !completed;
+    }
+
+    function nextPage() {
+        if (currentPage < Math.ceil(questions.length / questionsPerPage) - 1) {
+            currentPage++;
+            renderPage();
+            window.scrollTo(0, 0); // ページトップへ戻る
+        } else {
+            showResult();
+        }
+    }
+
+    function updateUI() {
+        const totalPages = Math.ceil(questions.length / questionsPerPage);
+        document.getElementById("current-page").innerText = currentPage + 1;
+        const progress = (currentPage / totalPages) * 100;
+        document.getElementById("bar-inner").style.width = progress + "%";
+        document.getElementById("percent").innerText = Math.floor(progress) + "%";
+        document.getElementById("next-button").innerText = (currentPage === totalPages - 1) ? "結果を見る" : "次の4問へ";
+        checkPageCompletion();
     }
 
     function showResult() {
-        document.getElementById("quizArea").style.display = "none";
-        document.getElementById("progressFill").style.width = "100%";
-        document.getElementById("result").style.display = "block";
+        document.getElementById("quiz-screen").style.display = "none";
+        document.getElementById("result-screen").style.display = "block";
+        
+        let scores = { type1:0, type2:0, type3:0, type4:0, type5:0, type6:0, type7:0, type8:0, type9:0 };
+        Object.keys(userAnswers).forEach(idx => {
+            if (userAnswers[idx] === 1) {
+                scores[questions[idx].type]++;
+            }
+        });
 
-        // 最高得点のタイプを計算
         let bestType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
-        document.getElementById("resultText").innerText = `あなたのタイプは「${typeNames[bestType]}」です！`;
+        document.getElementById("best-type-name").innerText = typeDetails[bestType].name;
+        document.getElementById("type-description").innerText = typeDetails[bestType].desc;
     }
 
-    // アプリ開始
-    initScores();
-    showQuestion();
+    init();
 </script>
-
 </body>
 </html>
