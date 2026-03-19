@@ -37,7 +37,7 @@
     </div>
 
     <div id="result-screen">
-        <p>診断結果を送信中...</p>
+        <p id="saving-text">診断結果を送信中...</p>
         <div id="result-content" style="display:none;">
             <p>あなたの診断結果は...</p>
             <div id="best-type-name" class="result-type"></div>
@@ -48,7 +48,7 @@
 </div>
 
 <script>
-    // --- 設定 ---
+    // --- 設定設定 ---
     const LIFF_ID = "2009366481-tsJl1FE2";
     const GAS_URL = "https://script.google.com/macros/s/AKfycbygLalmi1iw0z0TuZvBpTpu5ciWFiwgUG4qVdemOu8mebnIhVAvlPJjW8ccyYz7nPs/exec";
 
@@ -63,7 +63,7 @@
         "すべてのことに率直でありたいと思っている,type1",
         "不正なことや悪いことをする人は許せない,type1",
         "嘘やごまかしなど悪いことはしない主義だ,type1"
-        // ... 残りの質問
+        // ... 残りの質問をここに追加
     ];
 
     const typeDetails = {
@@ -81,9 +81,22 @@
     let questions = [];
     let currentPage = 0;
     const questionsPerPage = 4;
-    let userAnswers = {}; // { 質問INDEX: スコア }
+    let userAnswers = {};
+    window.userName = "未ログインユーザー";
 
-    function init() {
+    // アプリ起動時の処理
+    async function startApp() {
+        try {
+            await liff.init({ liffId: LIFF_ID });
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                window.userName = profile.displayName;
+            }
+        } catch (err) {
+            console.error("LIFF初期化失敗", err);
+        }
+        
+        // データの準備
         questions = rawDataList.map(item => {
             const lastCommaIndex = item.lastIndexOf(",");
             return { text: item.substring(0, lastCommaIndex), type: item.substring(lastCommaIndex + 1).trim() };
@@ -94,7 +107,6 @@
     function renderPage() {
         const listContainer = document.getElementById("question-list");
         listContainer.innerHTML = "";
-        
         const start = currentPage * questionsPerPage;
         const end = Math.min(start + questionsPerPage, questions.length);
 
@@ -110,18 +122,14 @@
             `;
             listContainer.appendChild(qDiv);
         }
-
         updateUI();
     }
 
     function selectAnswer(index, score, btn) {
         userAnswers[index] = score;
-        
-        // ボタンの見た目を更新
         const parent = btn.parentElement;
         Array.from(parent.children).forEach(child => child.classList.remove('active'));
         btn.classList.add('active');
-
         checkPageCompletion();
     }
 
@@ -139,7 +147,7 @@
         if (currentPage < Math.ceil(questions.length / questionsPerPage) - 1) {
             currentPage++;
             renderPage();
-            window.scrollTo(0, 0); // ページトップへ戻る
+            window.scrollTo(0, 0);
         } else {
             showResult();
         }
@@ -152,71 +160,49 @@
         document.getElementById("bar-inner").style.width = progress + "%";
         document.getElementById("percent").innerText = Math.floor(progress) + "%";
         document.getElementById("next-button").innerText = (currentPage === totalPages - 1) ? "結果を見る" : "次の4問へ";
-        checkPageCompletion();
     }
 
-    function showResult() {
+    async function showResult() {
+        // 画面切り替え
         document.getElementById("quiz-screen").style.display = "none";
         document.getElementById("result-screen").style.display = "block";
         
+        // スコア集計
         let scores = { type1:0, type2:0, type3:0, type4:0, type5:0, type6:0, type7:0, type8:0, type9:0 };
         Object.keys(userAnswers).forEach(idx => {
-            if (userAnswers[idx] === 1) {
-                scores[questions[idx].type]++;
-            }
+            if (userAnswers[idx] === 1) scores[questions[idx].type]++;
         });
 
         let bestType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
-        document.getElementById("best-type-name").innerText = typeDetails[bestType].name;
+        const resultName = typeDetails[bestType].name;
+
+        // 画面に結果をセット（まだ非表示）
+        document.getElementById("best-type-name").innerText = resultName;
         document.getElementById("type-description").innerText = typeDetails[bestType].desc;
 
-async function showResult() {
-    // ...既存の判定処理...
-    let bestType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
-    const resultName = typeDetails[bestType].name;
+        // GASへ送信（成否に関わらず結果を表示させる）
+        try {
+            await fetch(GAS_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userName: window.userName,
+                    resultType: resultName,
+                    answers: userAnswers
+                })
+            });
+        } catch (e) {
+            console.error("送信エラー:", e);
+        }
 
-    // スプレッドシートに送信
-    const gasUrl = "https://script.google.com/macros/s/AKfycbygLalmi1iw0z0TuZvBpTpu5ciWFiwgUG4qVdemOu8mebnIhVAvlPJjW8ccyYz7nPs/exec";
-    
-    fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors", // ← これが非常に重要です！
-        headers: {
-            "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-            userName: window.userName || "Guest",
-            resultType: resultName,
-            answers: userAnswers // すべての回答データ
-        })
-    });
-
-} catch (e) {
-    console.error("送信失敗", e);
-    // 画面切り替え処理...
-}
-
-// ★送信処理が終わったら、成否に関わらず結果を表示させるためにここに移動
-document.querySelector("#result-screen p").style.display = "none";
-document.getElementById("result-content").style.display = "block";
-
-
+        // 送信処理が終わったら表示を切り替える
+        document.getElementById("saving-text").style.display = "none";
+        document.getElementById("result-content").style.display = "block";
     }
 
-// LIFFの初期化（ユーザー名取得用）
-async function initializeLiff() {
-    await liff.init({ liffId: "2009366481-tsJl1FE2" });
-    if (liff.isLoggedIn()) {
-        const profile = await liff.getProfile();
-        window.userName = profile.displayName; // ユーザー名を保持
-    } else {
-        window.userName = "未ログインユーザー";
-    }
-}
-
-
-    init();
+    // アプリ開始
+    startApp();
 </script>
 </body>
 </html>
