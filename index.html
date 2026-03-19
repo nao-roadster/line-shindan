@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>180問 精密タイプ診断</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         :root { --line-green: #06C755; --bg-gray: #f5f6f7; }
         body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-gray); margin: 0; padding: 20px; display: flex; justify-content: center; }
@@ -344,7 +345,41 @@
         let bestType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
         document.getElementById("best-type-name").innerText = typeDetails[bestType].name;
         document.getElementById("type-description").innerText = typeDetails[bestType].desc;
+
+async function showResult() {
+    // ...既存の判定処理...
+    let bestType = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+    const resultName = typeDetails[bestType].name;
+
+    // スプレッドシートに送信
+    const gasUrl = "https://script.google.com/macros/s/AKfycbygLalmi1iw0z0TuZvBpTpu5ciWFiwgUG4qVdemOu8mebnIhVAvlPJjW8ccyYz7nPs/exec";
+    
+    fetch(gasUrl, {
+        method: "POST",
+        body: JSON.stringify({
+            userName: window.userName || "Guest",
+            resultType: resultName,
+            answers: userAnswers // すべての回答データ
+        })
+    });
+
+    // 画面切り替え処理...
+}
+
+
     }
+
+// LIFFの初期化（ユーザー名取得用）
+async function initializeLiff() {
+    await liff.init({ liffId: "2009366481-tsJl1FE2" });
+    if (liff.isLoggedIn()) {
+        const profile = await liff.getProfile();
+        window.userName = profile.displayName; // ユーザー名を保持
+    } else {
+        window.userName = "未ログインユーザー";
+    }
+}
+
 
     init();
 </script>
