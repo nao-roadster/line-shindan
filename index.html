@@ -180,6 +180,11 @@ async function showResult() {
     
     fetch(gasUrl, {
         method: "POST",
+        mode: "no-cors", // ← これが非常に重要です！
+        headers: {
+            "Content-Type": "application/json"
+        },
+
         body: JSON.stringify({
             userName: window.userName || "Guest",
             resultType: resultName,
@@ -187,8 +192,14 @@ async function showResult() {
         })
     });
 
+} catch (e) {
+    console.error("送信失敗", e);
     // 画面切り替え処理...
 }
+
+// ★送信処理が終わったら、成否に関わらず結果を表示させるためにここに移動
+document.querySelector("#result-screen p").style.display = "none";
+document.getElementById("result-content").style.display = "block";
 
 
     }
